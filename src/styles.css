@@ -563,6 +563,23 @@ input:disabled {
     padding-inline: 10px;
   }
 
+  .topbar {
+    gap: 8px;
+  }
+
+  h1 {
+    font-size: 29px;
+  }
+
+  .current-time {
+    min-width: 82px;
+  }
+
+  .icon-button {
+    min-width: 40px;
+    min-height: 40px;
+  }
+
   .field-row {
     grid-template-columns: 1fr;
   }

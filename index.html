@@ -21,6 +21,7 @@
             <span id="currentDate">--</span>
           </div>
           <button class="icon-button hidden" id="installBtn" aria-label="安装" title="安装">⬇</button>
+          <button class="icon-button" id="settingsBtn" aria-label="提醒设置" title="提醒设置">⚙</button>
           <button class="icon-button" id="themeBtn" aria-label="切换夜晚模式" title="切换夜晚模式">🌙</button>
         </div>
       </header>
@@ -124,6 +125,27 @@
               <input id="emojiInput" maxlength="8" aria-label="自定义 emoji" placeholder="输入或粘贴一个 Emoji" />
             </label>
           </div>
+        </form>
+      </div>
+    </div>
+
+    <div class="sheet hidden" id="settingsSheet" aria-hidden="true">
+      <div class="sheet-panel">
+        <header class="sheet-header">
+          <button class="sheet-action" id="settingsCancelBtn">取消</button>
+          <strong>提醒设置</strong>
+          <button class="sheet-action primary-text" type="submit" form="settingsForm">保存</button>
+        </header>
+
+        <form id="settingsForm" class="task-form">
+          <label class="toggle-line">
+            <input id="notificationsEnabledInput" type="checkbox" />
+            <span>开启提醒</span>
+          </label>
+          <label>
+            <span>提醒时间</span>
+            <input id="notificationTimeInput" type="time" value="10:00" required />
+          </label>
         </form>
       </div>
     </div>

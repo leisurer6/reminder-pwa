@@ -1,4 +1,4 @@
-const CACHE_NAME = "reminder-pwa-v7";
+const CACHE_NAME = "reminder-pwa-v8";
 const ASSETS = [
   "./",
   "./index.html",
@@ -31,6 +31,16 @@ self.addEventListener("fetch", (event) => {
         caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
         return response;
       });
+    })
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  event.waitUntil(
+    clients.matchAll({ type: "window", includeUncontrolled: true }).then((windows) => {
+      if (windows.length) return windows[0].focus();
+      return clients.openWindow("./");
     })
   );
 });

@@ -1,6 +1,8 @@
 const DB_NAME = "reminder-pwa-db";
 const DB_VERSION = 1;
 const STORE = "tasks";
+const NOTIFICATION_SETTINGS_KEY = "notificationSettings";
+const NOTIFIED_REMINDERS_KEY = "notifiedReminderKeys";
 
 const categories = [
   { id: "life", name: "生活", icon: "🏠" },
@@ -55,6 +57,12 @@ const el = {
   sheetTitle: document.querySelector("#sheetTitle"),
   saveBtn: document.querySelector("#saveBtn"),
   themeBtn: document.querySelector("#themeBtn"),
+  settingsBtn: document.querySelector("#settingsBtn"),
+  settingsSheet: document.querySelector("#settingsSheet"),
+  settingsForm: document.querySelector("#settingsForm"),
+  settingsCancelBtn: document.querySelector("#settingsCancelBtn"),
+  notificationsEnabled: document.querySelector("#notificationsEnabledInput"),
+  notificationTime: document.querySelector("#notificationTimeInput"),
   currentTime: document.querySelector("#currentTime"),
   currentDate: document.querySelector("#currentDate"),
   installBtn: document.querySelector("#installBtn"),
@@ -68,6 +76,36 @@ let tasks = [];
 let deferredInstallPrompt = null;
 let theme = localStorage.getItem("themeMode") || "light";
 let editingTaskId = null;
+let notificationSettings = readNotificationSettings();
+
+function readNotificationSettings() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(NOTIFICATION_SETTINGS_KEY));
+    return {
+      enabled: Boolean(saved?.enabled),
+      time: saved?.time || "10:00"
+    };
+  } catch {
+    return { enabled: false, time: "10:00" };
+  }
+}
+
+function saveNotificationSettings() {
+  localStorage.setItem(NOTIFICATION_SETTINGS_KEY, JSON.stringify(notificationSettings));
+}
+
+function readNotifiedReminderKeys() {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(NOTIFIED_REMINDERS_KEY)) || []);
+  } catch {
+    return new Set();
+  }
+}
+
+function saveNotifiedReminderKeys(keys) {
+  const recentKeys = Array.from(keys).slice(-180);
+  localStorage.setItem(NOTIFIED_REMINDERS_KEY, JSON.stringify(recentKeys));
+}
 
 function openDb() {
   return new Promise((resolve, reject) => {
@@ -564,6 +602,76 @@ function updateCurrentTime() {
   el.currentDate.textContent = `${now.getMonth() + 1}月${now.getDate()}日 ${weekdays[now.getDay()]}`;
 }
 
+function dateKey(value) {
+  const date = new Date(value);
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+function addDays(value, days) {
+  const date = new Date(value);
+  date.setDate(date.getDate() + days);
+  return date;
+}
+
+function reminderDateFor(task) {
+  if (task.kind === "short") return task.endAt ? new Date(task.endAt) : null;
+  if (task.kind === "long") return task.endAt ? addDays(task.endAt, -3) : null;
+  if (task.kind === "recurring") return new Date(task.dueAt);
+  return null;
+}
+
+function reminderText(task) {
+  if (task.kind === "short") return `今天截止：${task.title}`;
+  if (task.kind === "long") return `距离结束还有 3 天：${task.title}`;
+  return `今天安排：${task.title}`;
+}
+
+function isReminderTime(now) {
+  const [hour, minute] = notificationSettings.time.split(":").map(Number);
+  const scheduled = new Date(now);
+  scheduled.setHours(hour, minute, 0, 0);
+  const elapsed = now.getTime() - scheduled.getTime();
+  return elapsed >= 0 && elapsed < 10 * 60 * 1000;
+}
+
+async function maybeNotify() {
+  if (!notificationSettings.enabled || !("Notification" in window) || Notification.permission !== "granted" || !isReminderTime(new Date())) return;
+
+  const now = new Date();
+  const notifiedKeys = readNotifiedReminderKeys();
+  const eligibleTasks = tasks.filter((task) => {
+    if (task.kind === "recurring" && !["active", "waiting"].includes(task.status)) return false;
+    if (task.kind !== "recurring" && task.status !== "active") return false;
+    const reminderDate = reminderDateFor(task);
+    return reminderDate && dateKey(reminderDate) === dateKey(now);
+  });
+
+  for (const task of eligibleTasks) {
+    const reminderKey = `${task.id}:${dateKey(now)}:${notificationSettings.time}`;
+    if (notifiedKeys.has(reminderKey)) continue;
+    const registration = await navigator.serviceWorker.ready;
+    await registration.showNotification("提醒小本", {
+      body: reminderText(task),
+      icon: "./assets/icon.svg",
+      tag: reminderKey
+    });
+    notifiedKeys.add(reminderKey);
+  }
+  saveNotifiedReminderKeys(notifiedKeys);
+}
+
+function openSettingsSheet() {
+  el.notificationsEnabled.checked = notificationSettings.enabled;
+  el.notificationTime.value = notificationSettings.time;
+  el.settingsSheet.classList.remove("hidden");
+  el.settingsSheet.setAttribute("aria-hidden", "false");
+}
+
+function closeSettingsSheet() {
+  el.settingsSheet.classList.add("hidden");
+  el.settingsSheet.setAttribute("aria-hidden", "true");
+}
+
 function bindEvents() {
   el.kind.addEventListener("change", () => {
     updateFormControls();
@@ -656,6 +764,26 @@ function bindEvents() {
   });
 
   el.themeBtn.addEventListener("click", toggleTheme);
+  el.settingsBtn.addEventListener("click", openSettingsSheet);
+  el.settingsCancelBtn.addEventListener("click", closeSettingsSheet);
+  el.settingsSheet.addEventListener("click", (event) => {
+    if (event.target === el.settingsSheet) closeSettingsSheet();
+  });
+
+  el.settingsForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    let enabled = false;
+    if (el.notificationsEnabled.checked && "Notification" in window && "serviceWorker" in navigator) {
+      enabled = Notification.permission === "granted" || await Notification.requestPermission() === "granted";
+    }
+    notificationSettings = {
+      enabled,
+      time: el.notificationTime.value || "10:00"
+    };
+    saveNotificationSettings();
+    closeSettingsSheet();
+    await maybeNotify();
+  });
 
   el.list.addEventListener("click", async (event) => {
     const complete = event.target.closest("[data-complete]");
@@ -708,6 +836,7 @@ async function init() {
   await refresh();
   setInterval(async () => {
     await refresh();
+    await maybeNotify();
   }, 30_000);
   setInterval(updateCurrentTime, 15_000);
 }
