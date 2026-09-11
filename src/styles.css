@@ -123,7 +123,8 @@ h1 {
 
 .task-form,
 .task-form label,
-.emoji-block {
+.emoji-block,
+.attachment-block {
   display: grid;
   gap: 8px;
 }
@@ -165,7 +166,8 @@ h1 {
 }
 
 .task-form span,
-.emoji-block span {
+.emoji-block span,
+.attachment-block > span {
   color: var(--muted);
   font-size: 12px;
   font-weight: 800;
@@ -361,6 +363,10 @@ input:disabled {
   text-align: left;
 }
 
+.task-content.is-pressing {
+  opacity: 0.62;
+}
+
 .task-content:focus-visible {
   outline: 3px solid rgba(0, 122, 255, 0.22);
   outline-offset: 4px;
@@ -441,6 +447,66 @@ input:disabled {
 
 .theme-night .note {
   color: #bac3d2;
+}
+
+.attachment-controls {
+  display: flex;
+  gap: 8px;
+}
+
+.attachment-button,
+.attachment-remove {
+  display: inline-grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border-radius: 10px;
+  color: var(--accent);
+  background: rgba(0, 122, 255, 0.1);
+  font-size: 20px;
+}
+
+.attachment-button input {
+  display: none;
+}
+
+.attachment-remove {
+  color: var(--rose);
+  background: rgba(232, 86, 111, 0.1);
+  font-size: 22px;
+}
+
+.image-preview,
+.task-image-button {
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  padding: 0;
+  border-radius: 10px;
+  background: var(--panel);
+}
+
+.image-preview {
+  max-height: 220px;
+}
+
+.image-preview img,
+.task-image {
+  display: block;
+  width: 100%;
+  object-fit: cover;
+}
+
+.image-preview img {
+  max-height: 220px;
+}
+
+.task-image-button {
+  margin-top: 9px;
+}
+
+.task-image {
+  max-height: 150px;
 }
 
 .delete-button {
@@ -552,6 +618,34 @@ input:disabled {
   width: 100vw;
   height: 100vh;
   pointer-events: none;
+}
+
+.image-viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.9);
+}
+
+.image-viewer img {
+  width: 100%;
+  max-height: 85vh;
+  object-fit: contain;
+}
+
+.image-viewer-close {
+  position: absolute;
+  top: max(16px, env(safe-area-inset-top));
+  right: max(16px, env(safe-area-inset-right));
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.18);
+  font-size: 25px;
 }
 
 .hidden {

@@ -92,6 +92,19 @@
             <textarea id="noteInput" rows="2" maxlength="120" placeholder="可选"></textarea>
           </label>
 
+          <div class="attachment-block">
+            <span>图片</span>
+            <div class="attachment-controls">
+              <label class="attachment-button" title="添加图片" aria-label="添加图片">🖼
+                <input id="noteImageInput" type="file" accept="image/*" />
+              </label>
+              <button class="attachment-remove hidden" id="removeImageBtn" type="button" aria-label="移除图片" title="移除图片">×</button>
+            </div>
+            <button class="image-preview hidden" id="imagePreview" type="button" aria-label="查看图片">
+              <img id="imagePreviewImage" alt="任务图片预览" />
+            </button>
+          </div>
+
           <div class="field-row">
             <label>
               <span>分类</span>
@@ -143,11 +156,26 @@
             <span>开启提醒</span>
           </label>
           <label>
-            <span>提醒时间</span>
-            <input id="notificationTimeInput" type="time" value="10:00" required />
+            <span>短期提醒时间</span>
+            <input id="shortNotificationTimeInput" type="time" value="10:00" required />
           </label>
+          <div class="field-row">
+            <label>
+              <span>长期提前天数</span>
+              <input id="longNotificationDaysInput" type="number" min="1" max="30" step="1" value="3" required />
+            </label>
+            <label>
+              <span>长期提醒时间</span>
+              <input id="longNotificationTimeInput" type="time" value="10:00" required />
+            </label>
+          </div>
         </form>
       </div>
+    </div>
+
+    <div class="image-viewer hidden" id="imageViewer" aria-hidden="true">
+      <button class="image-viewer-close" id="imageViewerClose" aria-label="关闭图片" title="关闭图片">×</button>
+      <img id="viewerImage" alt="任务图片" />
     </div>
 
     <canvas id="fireworks" aria-hidden="true"></canvas>

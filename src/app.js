@@ -40,6 +40,10 @@ const el = {
   noExactTime: document.querySelector("#noExactTimeInput"),
   timeRow: document.querySelector("#timeRow"),
   note: document.querySelector("#noteInput"),
+  noteImage: document.querySelector("#noteImageInput"),
+  removeImageBtn: document.querySelector("#removeImageBtn"),
+  imagePreview: document.querySelector("#imagePreview"),
+  imagePreviewImage: document.querySelector("#imagePreviewImage"),
   category: document.querySelector("#categoryInput"),
   kind: document.querySelector("#kindInput"),
   repeat: document.querySelector("#repeatInput"),
@@ -62,11 +66,16 @@ const el = {
   settingsForm: document.querySelector("#settingsForm"),
   settingsCancelBtn: document.querySelector("#settingsCancelBtn"),
   notificationsEnabled: document.querySelector("#notificationsEnabledInput"),
-  notificationTime: document.querySelector("#notificationTimeInput"),
+  shortNotificationTime: document.querySelector("#shortNotificationTimeInput"),
+  longNotificationDays: document.querySelector("#longNotificationDaysInput"),
+  longNotificationTime: document.querySelector("#longNotificationTimeInput"),
   currentTime: document.querySelector("#currentTime"),
   currentDate: document.querySelector("#currentDate"),
   installBtn: document.querySelector("#installBtn"),
-  fireworks: document.querySelector("#fireworks")
+  fireworks: document.querySelector("#fireworks"),
+  imageViewer: document.querySelector("#imageViewer"),
+  imageViewerClose: document.querySelector("#imageViewerClose"),
+  viewerImage: document.querySelector("#viewerImage")
 };
 
 let db;
@@ -77,16 +86,22 @@ let deferredInstallPrompt = null;
 let theme = localStorage.getItem("themeMode") || "light";
 let editingTaskId = null;
 let notificationSettings = readNotificationSettings();
+let pendingImageDataUrl = null;
+let imageChanged = false;
+let longPressTimer = null;
+let ignoreNextTaskClick = false;
 
 function readNotificationSettings() {
   try {
     const saved = JSON.parse(localStorage.getItem(NOTIFICATION_SETTINGS_KEY));
     return {
       enabled: Boolean(saved?.enabled),
-      time: saved?.time || "10:00"
+      shortTime: saved?.shortTime || saved?.time || "10:00",
+      longDays: Math.min(Math.max(Number(saved?.longDays) || 3, 1), 30),
+      longTime: saved?.longTime || saved?.time || "10:00"
     };
   } catch {
-    return { enabled: false, time: "10:00" };
+    return { enabled: false, shortTime: "10:00", longDays: 3, longTime: "10:00" };
   }
 }
 
@@ -328,6 +343,10 @@ function renderTaskList(items, completed) {
     const completedAt = completed ? `<span class="pill">完成于 ${formatDue(task.completedAt || task.updatedAt)}</span>` : "";
     const overdue = !completed && isOverdue(task) ? `<span class="pill urgent">已超时</span>` : "";
     const note = task.note ? `<div class="note">${escapeHtml(task.note)}</div>` : "";
+    const imageSource = safeImageDataUrl(task.imageDataUrl);
+    const image = imageSource
+      ? `<button class="task-image-button" type="button" data-view-image="${task.id}" aria-label="查看 ${escapeHtml(task.title)} 的图片"><img class="task-image" src="${imageSource}" alt="${escapeHtml(task.title)} 的图片" /></button>`
+      : "";
     const check = completed
       ? `<button class="check-button undo-check" data-undo="${task.id}" aria-label="取消完成"><span>↺</span></button>`
       : `<button class="check-button" data-complete="${task.id}" aria-label="完成"><span>✓</span></button>`;
@@ -345,10 +364,11 @@ function renderTaskList(items, completed) {
         ${completedAt}
       </div>
       ${note}
+      ${image}
     `;
     const content = completed
       ? `<div class="task-content">${details}</div>`
-      : `<button class="task-content" type="button" data-edit="${task.id}" aria-label="编辑 ${escapeHtml(task.title)}">${details}</button>`;
+      : `<div class="task-content" data-edit="${task.id}" role="button" tabindex="0" aria-label="编辑 ${escapeHtml(task.title)}">${details}</div>`;
     return `
       <article class="task-item ${isOverdue(task) && !completed ? "is-overdue" : ""}">
         ${check}
@@ -404,6 +424,7 @@ function openEditSheet(id) {
   el.endDate.value = task.endAt ? dateForInput(task.endAt) : "";
   el.endTime.value = task.endAt && task.hasTime !== false ? timeForInput(task.endAt) : "";
   el.noEndDate.checked = task.kind === "long" && !task.endAt;
+  resetImageAttachment(task.imageDataUrl);
   el.timeRow.classList.toggle("disabled", el.noExactTime.checked);
   el.customEmojiRow.classList.toggle("hidden", emojis.includes(el.emoji.value));
   updateFormControls();
@@ -440,6 +461,49 @@ function escapeHtml(value) {
     '"': "&quot;",
     "'": "&#039;"
   })[char]);
+}
+
+function safeImageDataUrl(value) {
+  return typeof value === "string" && value.startsWith("data:image/") ? value : "";
+}
+
+function renderImagePreview() {
+  const imageSource = safeImageDataUrl(pendingImageDataUrl);
+  el.imagePreview.classList.toggle("hidden", !imageSource);
+  el.removeImageBtn.classList.toggle("hidden", !imageSource);
+  el.imagePreviewImage.src = imageSource;
+}
+
+function resetImageAttachment(imageDataUrl = null) {
+  pendingImageDataUrl = safeImageDataUrl(imageDataUrl) || null;
+  imageChanged = false;
+  el.noteImage.value = "";
+  renderImagePreview();
+}
+
+function compressImage(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error);
+    reader.onload = () => {
+      const image = new Image();
+      image.onerror = () => reject(new Error("图片无法读取"));
+      image.onload = () => {
+        const maxSize = 1280;
+        const scale = Math.min(maxSize / image.width, maxSize / image.height, 1);
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(image.width * scale));
+        canvas.height = Math.max(1, Math.round(image.height * scale));
+        const context = canvas.getContext("2d");
+        context.fillStyle = "#ffffff";
+        context.fillRect(0, 0, canvas.width, canvas.height);
+        context.drawImage(image, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL("image/jpeg", 0.82));
+      };
+      image.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
 }
 
 async function completeTask(id) {
@@ -550,6 +614,7 @@ function initForm() {
   el.kind.value = "short";
   el.repeat.value = "daily";
   el.emoji.value = "📚";
+  resetImageAttachment();
 
   el.category.innerHTML = categories.map((category) => {
     return `<option value="${category.id}">${category.icon} ${category.name}</option>`;
@@ -615,19 +680,25 @@ function addDays(value, days) {
 
 function reminderDateFor(task) {
   if (task.kind === "short") return task.endAt ? new Date(task.endAt) : null;
-  if (task.kind === "long") return task.endAt ? addDays(task.endAt, -3) : null;
+  if (task.kind === "long") return task.endAt ? addDays(task.endAt, -notificationSettings.longDays) : null;
   if (task.kind === "recurring") return new Date(task.dueAt);
   return null;
 }
 
 function reminderText(task) {
   if (task.kind === "short") return `今天截止：${task.title}`;
-  if (task.kind === "long") return `距离结束还有 3 天：${task.title}`;
+  if (task.kind === "long") return `距离结束还有 ${notificationSettings.longDays} 天：${task.title}`;
   return `今天安排：${task.title}`;
 }
 
-function isReminderTime(now) {
-  const [hour, minute] = notificationSettings.time.split(":").map(Number);
+function reminderTimeFor(task) {
+  if (task.kind === "short") return notificationSettings.shortTime;
+  if (task.kind === "long") return notificationSettings.longTime;
+  return task.hasTime === false ? "10:00" : timeForInput(task.dueAt);
+}
+
+function isReminderTime(now, time) {
+  const [hour, minute] = time.split(":").map(Number);
   const scheduled = new Date(now);
   scheduled.setHours(hour, minute, 0, 0);
   const elapsed = now.getTime() - scheduled.getTime();
@@ -635,7 +706,7 @@ function isReminderTime(now) {
 }
 
 async function maybeNotify() {
-  if (!notificationSettings.enabled || !("Notification" in window) || Notification.permission !== "granted" || !isReminderTime(new Date())) return;
+  if (!notificationSettings.enabled || !("Notification" in window) || Notification.permission !== "granted") return;
 
   const now = new Date();
   const notifiedKeys = readNotifiedReminderKeys();
@@ -643,11 +714,11 @@ async function maybeNotify() {
     if (task.kind === "recurring" && !["active", "waiting"].includes(task.status)) return false;
     if (task.kind !== "recurring" && task.status !== "active") return false;
     const reminderDate = reminderDateFor(task);
-    return reminderDate && dateKey(reminderDate) === dateKey(now);
+    return reminderDate && dateKey(reminderDate) === dateKey(now) && isReminderTime(now, reminderTimeFor(task));
   });
 
   for (const task of eligibleTasks) {
-    const reminderKey = `${task.id}:${dateKey(now)}:${notificationSettings.time}`;
+    const reminderKey = `${task.id}:${dateKey(now)}:${reminderTimeFor(task)}`;
     if (notifiedKeys.has(reminderKey)) continue;
     const registration = await navigator.serviceWorker.ready;
     await registration.showNotification("提醒小本", {
@@ -662,7 +733,9 @@ async function maybeNotify() {
 
 function openSettingsSheet() {
   el.notificationsEnabled.checked = notificationSettings.enabled;
-  el.notificationTime.value = notificationSettings.time;
+  el.shortNotificationTime.value = notificationSettings.shortTime;
+  el.longNotificationDays.value = notificationSettings.longDays;
+  el.longNotificationTime.value = notificationSettings.longTime;
   el.settingsSheet.classList.remove("hidden");
   el.settingsSheet.setAttribute("aria-hidden", "false");
 }
@@ -729,6 +802,7 @@ function bindEvents() {
       kind: el.kind.value,
       repeat: el.kind.value === "recurring" ? el.repeat.value : null,
       emoji: el.emoji.value.trim() || categoryFor(el.category.value).icon,
+      imageDataUrl: imageChanged ? pendingImageDataUrl : existingTask?.imageDataUrl || null,
       dueAt,
       endAt,
       hasTime,
@@ -778,18 +852,71 @@ function bindEvents() {
     }
     notificationSettings = {
       enabled,
-      time: el.notificationTime.value || "10:00"
+      shortTime: el.shortNotificationTime.value || "10:00",
+      longDays: Math.min(Math.max(Number(el.longNotificationDays.value) || 3, 1), 30),
+      longTime: el.longNotificationTime.value || "10:00"
     };
     saveNotificationSettings();
     closeSettingsSheet();
     await maybeNotify();
   });
 
+  el.noteImage.addEventListener("change", async () => {
+    const file = el.noteImage.files?.[0];
+    if (!file) return;
+    try {
+      pendingImageDataUrl = await compressImage(file);
+      imageChanged = true;
+      renderImagePreview();
+    } catch {
+      el.noteImage.value = "";
+    }
+  });
+
+  el.removeImageBtn.addEventListener("click", () => {
+    pendingImageDataUrl = null;
+    imageChanged = true;
+    el.noteImage.value = "";
+    renderImagePreview();
+  });
+
+  el.imagePreview.addEventListener("click", () => {
+    const imageSource = safeImageDataUrl(pendingImageDataUrl);
+    if (!imageSource) return;
+    el.viewerImage.src = imageSource;
+    el.imageViewer.classList.remove("hidden");
+    el.imageViewer.setAttribute("aria-hidden", "false");
+  });
+
+  el.imageViewerClose.addEventListener("click", () => {
+    el.imageViewer.classList.add("hidden");
+    el.imageViewer.setAttribute("aria-hidden", "true");
+  });
+
+  el.imageViewer.addEventListener("click", (event) => {
+    if (event.target === el.imageViewer) el.imageViewerClose.click();
+  });
+
   el.list.addEventListener("click", async (event) => {
+    const image = event.target.closest("[data-view-image]");
     const complete = event.target.closest("[data-complete]");
     const undo = event.target.closest("[data-undo]");
     const del = event.target.closest("[data-delete]");
     const edit = event.target.closest("[data-edit]");
+    if (image) {
+      const task = tasks.find((item) => item.id === image.dataset.viewImage);
+      const imageSource = safeImageDataUrl(task?.imageDataUrl);
+      if (imageSource) {
+        el.viewerImage.src = imageSource;
+        el.imageViewer.classList.remove("hidden");
+        el.imageViewer.setAttribute("aria-hidden", "false");
+      }
+      return;
+    }
+    if (ignoreNextTaskClick) {
+      ignoreNextTaskClick = false;
+      return;
+    }
     if (complete) {
       const item = complete.closest(".task-item");
       item?.classList.add("completing");
@@ -806,6 +933,35 @@ function bindEvents() {
       return;
     }
     if (edit) openEditSheet(edit.dataset.edit);
+  });
+
+  el.list.addEventListener("pointerdown", (event) => {
+    const edit = event.target.closest("[data-edit]");
+    if (!edit || event.target.closest("[data-view-image]")) return;
+    longPressTimer = window.setTimeout(() => {
+      ignoreNextTaskClick = true;
+      window.setTimeout(() => {
+        ignoreNextTaskClick = false;
+      }, 800);
+      edit.classList.add("is-pressing");
+      navigator.vibrate?.(8);
+      openEditSheet(edit.dataset.edit);
+    }, 560);
+  });
+
+  const clearLongPress = () => {
+    if (longPressTimer) window.clearTimeout(longPressTimer);
+    longPressTimer = null;
+    document.querySelectorAll(".task-content.is-pressing").forEach((item) => item.classList.remove("is-pressing"));
+  };
+  el.list.addEventListener("pointerup", clearLongPress);
+  el.list.addEventListener("pointercancel", clearLongPress);
+  el.list.addEventListener("pointerleave", clearLongPress);
+  el.list.addEventListener("keydown", (event) => {
+    const edit = event.target.closest("[data-edit]");
+    if (!edit || !["Enter", " "].includes(event.key)) return;
+    event.preventDefault();
+    openEditSheet(edit.dataset.edit);
   });
 
   el.installBtn.addEventListener("click", async () => {
