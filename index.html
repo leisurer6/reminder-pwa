@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#101828" />
+    <title>提醒小本</title>
+    <link rel="manifest" href="./manifest.json" />
+    <link rel="stylesheet" href="./src/styles.css" />
+  </head>
+  <body>
+    <div id="app">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">今天的节奏</p>
+          <h1>提醒小本</h1>
+        </div>
+        <div class="top-actions">
+          <button class="icon-button hidden" id="installBtn" aria-label="安装" title="安装">⬇</button>
+          <button class="icon-button" id="themeBtn" aria-label="切换夜晚模式" title="切换夜晚模式">🌙</button>
+        </div>
+      </header>
+
+      <main>
+        <nav class="kind-switch" aria-label="任务类型">
+          <button class="kind-tab active" data-kind="short">短期</button>
+          <button class="kind-tab" data-kind="long">长期</button>
+          <button class="kind-tab" data-kind="recurring">循环</button>
+        </nav>
+
+        <section id="summary" class="summary"></section>
+        <button class="completed-link" id="completedBtn">查看已完成</button>
+        <section id="list" class="task-list" aria-live="polite"></section>
+      </main>
+
+      <button class="fab" id="addBtn" aria-label="添加提醒">＋</button>
+    </div>
+
+    <div class="sheet hidden" id="addSheet" aria-hidden="true">
+      <div class="sheet-panel">
+        <header class="sheet-header">
+          <button class="sheet-action" id="cancelBtn">取消</button>
+          <strong>新提醒</strong>
+          <button class="sheet-action primary-text" id="saveBtn" type="submit" form="taskForm">完成</button>
+        </header>
+
+        <form id="taskForm" class="task-form">
+          <label>
+            <span>标题</span>
+            <input id="titleInput" maxlength="40" autocomplete="off" placeholder="比如：背单词 20 个" required />
+          </label>
+
+          <div class="field-row">
+            <label>
+              <span>开始日期</span>
+              <input id="dateInput" type="date" required />
+            </label>
+            <label>
+              <span>结束日期</span>
+              <input id="endDateInput" type="date" />
+            </label>
+          </div>
+
+          <label class="toggle-line hidden" id="noEndDateWrap">
+            <input id="noEndDateInput" type="checkbox" />
+            <span>暂不设置结束日期</span>
+          </label>
+
+          <label class="toggle-line">
+            <input id="noExactTimeInput" type="checkbox" />
+            <span>不设具体时间</span>
+          </label>
+
+          <div class="field-row" id="timeRow">
+            <label>
+              <span>开始时间</span>
+              <input id="timeInput" type="time" />
+            </label>
+            <label>
+              <span>结束时间</span>
+              <input id="endTimeInput" type="time" />
+            </label>
+          </div>
+
+          <label>
+            <span>备注</span>
+            <textarea id="noteInput" rows="2" maxlength="120" placeholder="可选"></textarea>
+          </label>
+
+          <div class="field-row">
+            <label>
+              <span>分类</span>
+              <select id="categoryInput"></select>
+            </label>
+            <label>
+              <span>类型</span>
+              <select id="kindInput">
+                <option value="short">短期</option>
+                <option value="long">长期</option>
+                <option value="recurring">循环</option>
+              </select>
+            </label>
+          </div>
+
+          <label id="repeatWrap" class="hidden">
+            <span>循环方式</span>
+            <select id="repeatInput">
+              <option value="daily">每天</option>
+              <option value="weekdays">工作日</option>
+              <option value="weekly">每周</option>
+              <option value="monthly">每月</option>
+            </select>
+          </label>
+
+          <div class="emoji-block">
+            <span>图标</span>
+            <div id="emojiPicker" class="emoji-picker"></div>
+            <label class="custom-emoji-row hidden" id="customEmojiRow">
+              <span>自定义图标</span>
+              <input id="emojiInput" maxlength="8" aria-label="自定义 emoji" placeholder="输入或粘贴一个 Emoji" />
+            </label>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <canvas id="fireworks" aria-hidden="true"></canvas>
+    <script src="./src/app.js" type="module"></script>
+  </body>
+</html>
