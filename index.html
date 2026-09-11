@@ -16,6 +16,10 @@
           <h1>提醒小本</h1>
         </div>
         <div class="top-actions">
+          <div class="current-time" aria-live="polite">
+            <strong id="currentTime">--:--</strong>
+            <span id="currentDate">--</span>
+          </div>
           <button class="icon-button hidden" id="installBtn" aria-label="安装" title="安装">⬇</button>
           <button class="icon-button" id="themeBtn" aria-label="切换夜晚模式" title="切换夜晚模式">🌙</button>
         </div>
@@ -50,12 +54,12 @@
             <input id="titleInput" maxlength="40" autocomplete="off" placeholder="比如：背单词 20 个" required />
           </label>
 
-          <div class="field-row">
+          <div class="field-row" id="dateRow">
             <label>
-              <span>开始日期</span>
+              <span id="startDateLabel">开始日期</span>
               <input id="dateInput" type="date" required />
             </label>
-            <label>
+            <label id="endDateField">
               <span>结束日期</span>
               <input id="endDateInput" type="date" />
             </label>
@@ -73,10 +77,10 @@
 
           <div class="field-row" id="timeRow">
             <label>
-              <span>开始时间</span>
+              <span id="startTimeLabel">开始时间</span>
               <input id="timeInput" type="time" />
             </label>
-            <label>
+            <label id="endTimeField">
               <span>结束时间</span>
               <input id="endTimeInput" type="time" />
             </label>

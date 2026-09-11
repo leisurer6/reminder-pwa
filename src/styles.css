@@ -87,7 +87,27 @@ h1 {
 
 .top-actions {
   display: flex;
+  align-items: center;
   gap: 8px;
+}
+
+.current-time {
+  display: grid;
+  justify-items: end;
+  gap: 2px;
+  min-width: 96px;
+}
+
+.current-time strong {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.current-time span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 750;
+  white-space: nowrap;
 }
 
 .icon-button {
@@ -183,6 +203,10 @@ textarea:focus {
 .field-row.disabled {
   opacity: 0.38;
   pointer-events: none;
+}
+
+.field-row.single-field {
+  grid-template-columns: 1fr;
 }
 
 input:disabled {

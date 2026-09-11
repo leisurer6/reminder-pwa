@@ -25,10 +25,15 @@ const el = {
   form: document.querySelector("#taskForm"),
   title: document.querySelector("#titleInput"),
   date: document.querySelector("#dateInput"),
+  dateRow: document.querySelector("#dateRow"),
+  startDateLabel: document.querySelector("#startDateLabel"),
+  endDateField: document.querySelector("#endDateField"),
   endDate: document.querySelector("#endDateInput"),
   noEndDate: document.querySelector("#noEndDateInput"),
   noEndDateWrap: document.querySelector("#noEndDateWrap"),
   time: document.querySelector("#timeInput"),
+  startTimeLabel: document.querySelector("#startTimeLabel"),
+  endTimeField: document.querySelector("#endTimeField"),
   endTime: document.querySelector("#endTimeInput"),
   noExactTime: document.querySelector("#noExactTimeInput"),
   timeRow: document.querySelector("#timeRow"),
@@ -50,6 +55,8 @@ const el = {
   sheetTitle: document.querySelector("#sheetTitle"),
   saveBtn: document.querySelector("#saveBtn"),
   themeBtn: document.querySelector("#themeBtn"),
+  currentTime: document.querySelector("#currentTime"),
+  currentDate: document.querySelector("#currentDate"),
   installBtn: document.querySelector("#installBtn"),
   fireworks: document.querySelector("#fireworks")
 };
@@ -192,18 +199,24 @@ function compareActiveTasks(a, b) {
 
 function nextRecurringDate(task) {
   const next = new Date(task.dueAt);
-  const originalDay = next.getDate();
-  if (task.repeat === "daily") next.setDate(next.getDate() + 1);
-  if (task.repeat === "weekly") next.setDate(next.getDate() + 7);
-  if (task.repeat === "monthly") {
-    next.setMonth(next.getMonth() + 1);
-    if (next.getDate() !== originalDay) next.setDate(0);
-  }
-  if (task.repeat === "weekdays") {
-    do {
-      next.setDate(next.getDate() + 1);
-    } while ([0, 6].includes(next.getDay()));
-  }
+  const advance = () => {
+    const originalDay = next.getDate();
+    if (task.repeat === "daily") next.setDate(next.getDate() + 1);
+    if (task.repeat === "weekly") next.setDate(next.getDate() + 7);
+    if (task.repeat === "monthly") {
+      next.setMonth(next.getMonth() + 1);
+      if (next.getDate() !== originalDay) next.setDate(0);
+    }
+    if (task.repeat === "weekdays") {
+      do {
+        next.setDate(next.getDate() + 1);
+      } while ([0, 6].includes(next.getDay()));
+    }
+  };
+
+  do {
+    advance();
+  } while (next.getTime() <= Date.now());
   return next.toISOString();
 }
 
@@ -217,8 +230,23 @@ function nextRecurringWindow(task) {
 
 async function refresh() {
   tasks = await getAllTasks();
+  const waitingRecurringTasks = tasks.filter((task) => task.kind === "recurring" && task.status === "waiting" && new Date(task.dueAt).getTime() <= Date.now());
+  if (waitingRecurringTasks.length) {
+    await Promise.all(waitingRecurringTasks.map((task) => saveTask({
+      ...task,
+      status: "active",
+      updatedAt: new Date().toISOString()
+    })));
+    tasks = await getAllTasks();
+  }
   tasks.sort(compareActiveTasks);
   render();
+}
+
+function repeatLabel(task) {
+  if (task.repeat !== "weekly") return labels[task.repeat];
+  const weekdays = ["日", "一", "二", "三", "四", "五", "六"];
+  return `每周${weekdays[new Date(task.dueAt).getDay()]}`;
 }
 
 function renderSummary(activeTasks, completedTasks) {
@@ -258,7 +286,7 @@ function renderTaskList(items, completed) {
 
   el.list.innerHTML = items.map((task) => {
     const category = categoryFor(task.category);
-    const repeat = task.kind === "recurring" ? `<span class="pill">${labels[task.repeat]}</span>` : "";
+    const repeat = task.kind === "recurring" ? `<span class="pill">${repeatLabel(task)}</span>` : "";
     const completedAt = completed ? `<span class="pill">完成于 ${formatDue(task.completedAt || task.updatedAt)}</span>` : "";
     const overdue = !completed && isOverdue(task) ? `<span class="pill urgent">已超时</span>` : "";
     const note = task.note ? `<div class="note">${escapeHtml(task.note)}</div>` : "";
@@ -395,6 +423,7 @@ async function completeTask(id) {
     const next = nextRecurringWindow(task);
     task.dueAt = next.dueAt;
     task.endAt = next.endAt;
+    task.status = "waiting";
     task.updatedAt = new Date().toISOString();
     await saveTask(task);
   } else {
@@ -514,8 +543,25 @@ function updateFormControls() {
   const isLong = el.kind.value === "long";
   el.repeatWrap.classList.toggle("hidden", !isRecurring);
   el.noEndDateWrap.classList.toggle("hidden", !isLong);
+  el.dateRow.classList.toggle("single-field", isRecurring);
+  el.timeRow.classList.toggle("single-field", isRecurring);
+  el.endDateField.classList.toggle("hidden", isRecurring);
+  el.endTimeField.classList.toggle("hidden", isRecurring);
+  el.startDateLabel.textContent = isRecurring ? "首次执行日期" : "开始日期";
+  el.startTimeLabel.textContent = isRecurring ? "执行时间" : "开始时间";
+  if (isRecurring) {
+    el.endDate.value = "";
+    el.endTime.value = "";
+  }
   if (!isLong) el.noEndDate.checked = false;
   updateEndDateState();
+}
+
+function updateCurrentTime() {
+  const now = new Date();
+  const weekdays = ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"];
+  el.currentTime.textContent = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  el.currentDate.textContent = `${now.getMonth() + 1}月${now.getDate()}日 ${weekdays[now.getDay()]}`;
 }
 
 function bindEvents() {
@@ -658,10 +704,12 @@ async function init() {
   applyTheme();
   initForm();
   bindEvents();
+  updateCurrentTime();
   await refresh();
   setInterval(async () => {
     await refresh();
   }, 30_000);
+  setInterval(updateCurrentTime, 15_000);
 }
 
 init();
