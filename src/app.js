@@ -47,6 +47,8 @@ const el = {
   addBtn: document.querySelector("#addBtn"),
   addSheet: document.querySelector("#addSheet"),
   cancelBtn: document.querySelector("#cancelBtn"),
+  sheetTitle: document.querySelector("#sheetTitle"),
+  saveBtn: document.querySelector("#saveBtn"),
   themeBtn: document.querySelector("#themeBtn"),
   installBtn: document.querySelector("#installBtn"),
   fireworks: document.querySelector("#fireworks")
@@ -58,6 +60,7 @@ let activeKind = "short";
 let tasks = [];
 let deferredInstallPrompt = null;
 let theme = localStorage.getItem("themeMode") || "light";
+let editingTaskId = null;
 
 function openDb() {
   return new Promise((resolve, reject) => {
@@ -265,31 +268,82 @@ function renderTaskList(items, completed) {
     const action = completed
       ? `<button class="delete-button" data-delete="${task.id}" aria-label="删除">×</button>`
       : `<button class="delete-button" data-delete="${task.id}" aria-label="删除">×</button>`;
+    const details = `
+      <p class="task-title">${task.emoji} ${escapeHtml(task.title)}</p>
+      <div class="task-meta">
+        <span class="pill">${category.icon} ${category.name}</span>
+        <span class="pill">${labels[task.kind]}</span>
+        <span class="pill">${formatTaskWindow(task)}</span>
+        ${repeat}
+        ${overdue}
+        ${completedAt}
+      </div>
+      ${note}
+    `;
+    const content = completed
+      ? `<div class="task-content">${details}</div>`
+      : `<button class="task-content" type="button" data-edit="${task.id}" aria-label="编辑 ${escapeHtml(task.title)}">${details}</button>`;
     return `
       <article class="task-item ${isOverdue(task) && !completed ? "is-overdue" : ""}">
         ${check}
-        <div>
-          <p class="task-title">${task.emoji} ${escapeHtml(task.title)}</p>
-          <div class="task-meta">
-            <span class="pill">${category.icon} ${category.name}</span>
-            <span class="pill">${labels[task.kind]}</span>
-            <span class="pill">${formatTaskWindow(task)}</span>
-            ${repeat}
-            ${overdue}
-            ${completedAt}
-          </div>
-          ${note}
-        </div>
+        ${content}
         ${action}
       </article>
     `;
   }).join("");
 }
 
+function setSheetMode(editing) {
+  el.sheetTitle.textContent = editing ? "编辑提醒" : "新提醒";
+  el.saveBtn.textContent = editing ? "保存" : "完成";
+}
+
 function openAddSheet() {
   el.addSheet.classList.remove("hidden");
   el.addSheet.setAttribute("aria-hidden", "false");
   el.title.focus();
+}
+
+function openCreateSheet() {
+  editingTaskId = null;
+  initForm();
+  setSheetMode(false);
+  openAddSheet();
+}
+
+function dateForInput(value) {
+  const date = new Date(value);
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+function timeForInput(value) {
+  const date = new Date(value);
+  return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function openEditSheet(id) {
+  const task = tasks.find((item) => item.id === id && item.status === "active");
+  if (!task) return;
+
+  editingTaskId = task.id;
+  el.title.value = task.title;
+  el.note.value = task.note || "";
+  el.category.value = task.category;
+  el.kind.value = task.kind;
+  el.repeat.value = task.repeat || "daily";
+  el.emoji.value = task.emoji || categoryFor(task.category).icon;
+  el.date.value = dateForInput(task.dueAt);
+  el.noExactTime.checked = task.hasTime === false;
+  el.time.value = task.hasTime === false ? "" : timeForInput(task.dueAt);
+  el.endDate.value = task.endAt ? dateForInput(task.endAt) : "";
+  el.endTime.value = task.endAt && task.hasTime !== false ? timeForInput(task.endAt) : "";
+  el.noEndDate.checked = task.kind === "long" && !task.endAt;
+  el.timeRow.classList.toggle("disabled", el.noExactTime.checked);
+  el.customEmojiRow.classList.toggle("hidden", emojis.includes(el.emoji.value));
+  updateFormControls();
+  updateEmojiChoice();
+  setSheetMode(true);
+  openAddSheet();
 }
 
 function closeAddSheet() {
@@ -426,11 +480,14 @@ function initForm() {
   el.endTime.value = "";
   el.noExactTime.checked = false;
   el.timeRow.classList.remove("disabled");
+  el.kind.value = "short";
+  el.repeat.value = "daily";
   el.emoji.value = "📚";
 
   el.category.innerHTML = categories.map((category) => {
     return `<option value="${category.id}">${category.icon} ${category.name}</option>`;
   }).join("");
+  el.category.value = "study";
 
   el.emojiPicker.innerHTML = emojis.map((emoji) => {
     return `<button class="emoji-choice" type="button" data-emoji="${emoji}">${emoji}</button>`;
@@ -508,8 +565,10 @@ function bindEvents() {
     }
     const dueAt = startDateTime.toISOString();
     const endAt = endDateTime?.toISOString() || null;
+    const existingTask = editingTaskId ? tasks.find((task) => task.id === editingTaskId) : null;
     await saveTask({
-      id: crypto.randomUUID(),
+      ...existingTask,
+      id: existingTask?.id || crypto.randomUUID(),
       title: el.title.value.trim(),
       note: el.note.value.trim(),
       category: el.category.value,
@@ -519,10 +578,11 @@ function bindEvents() {
       dueAt,
       endAt,
       hasTime,
-      status: "active",
-      createdAt: new Date().toISOString(),
+      status: existingTask?.status || "active",
+      createdAt: existingTask?.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString()
     });
+    editingTaskId = null;
     el.form.reset();
     initForm();
     closeAddSheet();
@@ -543,7 +603,7 @@ function bindEvents() {
     render();
   });
 
-  el.addBtn.addEventListener("click", openAddSheet);
+  el.addBtn.addEventListener("click", openCreateSheet);
   el.cancelBtn.addEventListener("click", closeAddSheet);
   el.addSheet.addEventListener("click", (event) => {
     if (event.target === el.addSheet) closeAddSheet();
@@ -555,16 +615,23 @@ function bindEvents() {
     const complete = event.target.closest("[data-complete]");
     const undo = event.target.closest("[data-undo]");
     const del = event.target.closest("[data-delete]");
+    const edit = event.target.closest("[data-edit]");
     if (complete) {
       const item = complete.closest(".task-item");
       item?.classList.add("completing");
       window.setTimeout(() => completeTask(complete.dataset.complete), 260);
+      return;
     }
-    if (undo) await undoCompleteTask(undo.dataset.undo);
+    if (undo) {
+      await undoCompleteTask(undo.dataset.undo);
+      return;
+    }
     if (del) {
       await removeTask(del.dataset.delete);
       await refresh();
+      return;
     }
+    if (edit) openEditSheet(edit.dataset.edit);
   });
 
   el.installBtn.addEventListener("click", async () => {

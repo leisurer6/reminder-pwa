@@ -327,6 +327,22 @@ input:disabled {
   overflow: hidden;
 }
 
+.task-content {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  color: inherit;
+  background: transparent;
+  text-align: left;
+}
+
+.task-content:focus-visible {
+  outline: 3px solid rgba(0, 122, 255, 0.22);
+  outline-offset: 4px;
+  border-radius: 8px;
+}
+
 .check-button {
   width: 30px;
   height: 30px;
